@@ -1,0 +1,52 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译 (不签名)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project FunctionPlotter.xcodeproj \
+            -target FunctionPlotter \
+            -configuration Release \
+            -sdk iphoneos \
+            -arch arm64 \
+            -derivedDataPath dd \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -60
+
+      - name: 打包成 ipa
+        run: |
+          set -e
+          APP=$(find dd -maxdepth 4 -name "FunctionPlotter.app" -type d | head -1)
+          echo "found app: $APP"
+          test -n "$APP"
+          rm -rf Payload FunctionPlotter.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry FunctionPlotter.ipa Payload
+          ls -lh FunctionPlotter.ipa
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: FunctionPlotter-ipa
+          path: FunctionPlotter.ipa
