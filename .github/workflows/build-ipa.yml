@@ -5,6 +5,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-14
@@ -26,17 +30,17 @@ jobs:
             -target FunctionPlotter \
             -configuration Release \
             -sdk iphoneos \
-            -arch arm64 \
-            -derivedDataPath dd \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tail -60
+            build 2>&1 | tail -80
 
       - name: 打包成 ipa
         run: |
           set -e
-          APP=$(find dd -maxdepth 4 -name "FunctionPlotter.app" -type d | head -1)
+          APP=$(find . -name "FunctionPlotter.app" -type d -not -path "*/Index.noindex/*" | head -1)
           echo "found app: $APP"
           test -n "$APP"
           rm -rf Payload FunctionPlotter.ipa
@@ -44,6 +48,7 @@ jobs:
           cp -R "$APP" Payload/
           zip -qry FunctionPlotter.ipa Payload
           ls -lh FunctionPlotter.ipa
+          unzip -l FunctionPlotter.ipa | head -20
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
